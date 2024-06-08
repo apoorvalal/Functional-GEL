@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 
 from fgel.abstract_estimation_method import AbstractEstimationMethod
 
@@ -16,15 +15,19 @@ class KernelMMR(AbstractEstimationMethod):
 
         self._set_kernel(z, z_val)
 
-        optimizer = torch.optim.LBFGS(self.model.parameters(),
-                                      line_search_fn="strong_wolfe")
+        optimizer = torch.optim.LBFGS(
+            self.model.parameters(), line_search_fn="strong_wolfe"
+        )
 
         def closure():
             optimizer.zero_grad()
             psi = self.model.psi(x_tensor)
-            loss = torch.einsum('ir, ij, jr -> ', psi, self.kernel_z, psi) / (n_sample ** 2)
+            loss = torch.einsum("ir, ij, jr -> ", psi, self.kernel_z, psi) / (
+                n_sample**2
+            )
             loss.backward()
             return loss
+
         optimizer.step(closure)
 
         if self.verbose and x_val is not None:
@@ -32,9 +35,14 @@ class KernelMMR(AbstractEstimationMethod):
             print("Validation MMR loss: %e" % val_mmr)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from experiments.exp_heteroskedastic import run_heteroskedastic_n_times
 
-    results = run_heteroskedastic_n_times(theta=1.7, noise=1.0, n_train=200, repititions=20,
-                                         estimatortype=KernelMMR,)
-    print('Thetas: ', results['theta'])
+    results = run_heteroskedastic_n_times(
+        theta=1.7,
+        noise=1.0,
+        n_train=200,
+        repititions=20,
+        estimatortype=KernelMMR,
+    )
+    print("Thetas: ", results["theta"])

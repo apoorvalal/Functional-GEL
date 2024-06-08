@@ -5,7 +5,7 @@ from fgel.baselines.least_squares import OrdinaryLeastSquares
 from fgel.baselines.kernel_mmr import KernelMMR
 from fgel.baselines.kernel_vmm import KernelVMM
 from fgel.baselines.neural_vmm import NeuralVMM
-from fgel.baselines.sieve_minimum_distance import SMDIdentity, SMDHeteroskedastic
+from fgel.baselines.sieve_minimum_distance import SMDHeteroskedastic
 from fgel.kernel_fgel import KernelFGEL
 from fgel.neural_fgel import NeuralFGEL
 

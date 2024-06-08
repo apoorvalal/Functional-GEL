@@ -9,7 +9,6 @@ cvx_solver = cvx.MOSEK
 
 
 class KernelFGEL(GeneralizedEL):
-
     def __init__(self, reg_param=1e-6, **kwargs):
         super().__init__(**kwargs)
         self.reg_param = reg_param
@@ -17,16 +16,22 @@ class KernelFGEL(GeneralizedEL):
     def _init_dual_func(self):
         self.dual_func = Parameter(shape=(self.kernel_z.shape[0], self.psi_dim))
         # self.dual_normalization = Parameter(shape=(1, 1))
-        self.params = torch.nn.Parameter(torch.zeros(size=(1, 1), dtype=torch.float32), requires_grad=True)
+        self.params = torch.nn.Parameter(
+            torch.zeros(size=(1, 1), dtype=torch.float32), requires_grad=True
+        )
 
     def get_rkhs_norm(self):
-        return torch.einsum('ir, ij, jr ->', self.dual_func.params, self.kernel_z, self.dual_func.params)
+        return torch.einsum(
+            "ir, ij, jr ->", self.dual_func.params, self.kernel_z, self.dual_func.params
+        )
 
     def objective(self, x, z, *args, **kwargs):
-        dual_func_k_psi = torch.einsum('jr, ji, ir -> i', self.dual_func.params, self.kernel_z, self.model.psi(x))
+        dual_func_k_psi = torch.einsum(
+            "jr, ji, ir -> i", self.dual_func.params, self.kernel_z, self.model.psi(x)
+        )
         objective = torch.mean(self.gel_function(dual_func_k_psi))
-        regularizer = self.reg_param/2 * torch.sqrt(self.get_rkhs_norm())
-        return objective, - objective + regularizer
+        regularizer = self.reg_param / 2 * torch.sqrt(self.get_rkhs_norm())
+        return objective, -objective + regularizer
 
     # def objective(self, x, z, *args, **kwargs):
     #     dual_func_k_psi = torch.einsum('jr, ji, ir -> i', self.dual_func.params, self.kernel_z, self.model.psi(x))
@@ -47,11 +52,20 @@ class KernelFGEL(GeneralizedEL):
                 psi = self.model.psi(x).detach().numpy()
                 dual_func_psi = np.zeros(n_sample)
                 for k in range(self.psi_dim):
-                    dual_func_psi += dual_func[:, k] @ self.kernel_z.detach().numpy() @ cvx.diag(psi[:, k])
+                    dual_func_psi += (
+                        dual_func[:, k]
+                        @ self.kernel_z.detach().numpy()
+                        @ cvx.diag(psi[:, k])
+                    )
 
-                objective = (1/n_sample * cvx.sum(self.gel_function(dual_func_psi, cvxpy=True))
-                             - self.reg_param/2 * cvx.square(cvx.norm(cvx.transpose(dual_func) @ self.k_cholesky.detach().numpy())))
-                if self.divergence_type == 'log':
+                objective = 1 / n_sample * cvx.sum(
+                    self.gel_function(dual_func_psi, cvxpy=True)
+                ) - self.reg_param / 2 * cvx.square(
+                    cvx.norm(
+                        cvx.transpose(dual_func) @ self.k_cholesky.detach().numpy()
+                    )
+                )
+                if self.divergence_type == "log":
                     constraint = [dual_func_psi <= 1 - n_sample]
                 else:
                     constraint = []
@@ -59,16 +73,28 @@ class KernelFGEL(GeneralizedEL):
                 problem.solve(solver=cvx_solver, verbose=False)
                 self.dual_func.update_params(dual_func.value)
             except:
-                print('CVXPY failed. Using old dual_func value')
+                print("CVXPY failed. Using old dual_func value")
         return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from experiments.exp_heteroskedastic import run_heteroskedastic_n_times
 
-    estimatorkwargs = dict(divergence='log', theta_optim='lbfgs', dual_optim='lbfgs',
-                           max_num_epochs=50000, eval_freq=2000, pretrain=True)
-    results = run_heteroskedastic_n_times(theta=1.7, noise=1.0, n_train=200, repititions=10,
-                                          estimatortype=KernelFGEL, estimatorkwargs=estimatorkwargs)
-    print('Thetas: ', results['theta'])
-    print('Train risk: ', results['train_risk'])
+    estimatorkwargs = dict(
+        divergence="log",
+        theta_optim="lbfgs",
+        dual_optim="lbfgs",
+        max_num_epochs=50000,
+        eval_freq=2000,
+        pretrain=True,
+    )
+    results = run_heteroskedastic_n_times(
+        theta=1.7,
+        noise=1.0,
+        n_train=200,
+        repititions=10,
+        estimatortype=KernelFGEL,
+        estimatorkwargs=estimatorkwargs,
+    )
+    print("Thetas: ", results["theta"])
+    print("Train risk: ", results["train_risk"])

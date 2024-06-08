@@ -31,7 +31,9 @@ class AbstractEstimationMethod:
     def _set_kernel(self, z, z_val=None):
         if self.kernel_z is None and z is not None:
             self.kernel_z = get_rbf_kernel(z, z, **self.kernel_args).type(torch.float32)
-            self.k_cholesky = torch.tensor(np.transpose(compute_cholesky_factor(self.kernel_z.detach().numpy())))
+            self.k_cholesky = torch.tensor(
+                np.transpose(compute_cholesky_factor(self.kernel_z.detach().numpy()))
+            )
         if z_val is not None:
             self.kernel_z_val = get_rbf_kernel(z_val, z_val, **self.kernel_args)
 
@@ -43,7 +45,7 @@ class AbstractEstimationMethod:
         n = z_val.shape[0]
         self._set_kernel(z=None, z_val=z_val)
         psi = self.model.psi(x_val)
-        loss = torch.einsum('ir, ij, jr -> ', psi, self.kernel_z_val, psi) / (n ** 2)
+        loss = torch.einsum("ir, ij, jr -> ", psi, self.kernel_z_val, psi) / (n**2)
         return loss
 
     def _to_tensor(self, data_array):
@@ -53,17 +55,21 @@ class AbstractEstimationMethod:
         raise NotImplementedError()
 
     def _pretrain_theta(self, x, z, mmr=True):
-        optimizer = torch.optim.LBFGS(self.model.parameters(),
-                                      line_search_fn="strong_wolfe")
+        optimizer = torch.optim.LBFGS(
+            self.model.parameters(), line_search_fn="strong_wolfe"
+        )
 
         def closure():
             optimizer.zero_grad()
             psi = self.model.psi(x)
             if mmr:
                 self._set_kernel(z=z)
-                loss = torch.einsum('ir, ij, jr -> ', psi, self.kernel_z, psi) / (x[0].shape[0] ** 2)
+                loss = torch.einsum("ir, ij, jr -> ", psi, self.kernel_z, psi) / (
+                    x[0].shape[0] ** 2
+                )
             else:
-                loss = (psi ** 2).mean()
+                loss = (psi**2).mean()
             loss.backward()
             return loss
+
         optimizer.step(closure)

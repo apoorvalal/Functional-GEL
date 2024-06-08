@@ -13,8 +13,12 @@ class SMDIdentity(AbstractEstimationMethod):
     # Implements SMD algorithm using LBFGS optimizer and identity omega
     def __init__(self, model, num_knots=5, polyn_degree=2):
         AbstractEstimationMethod.__init__(self, model)
-        self.basis = MultiOutputPolynomialSplineBasis(z_dim=self.model.dim_z, num_out=self.psi_dim,
-                                                      num_knots=num_knots, degree=polyn_degree)
+        self.basis = MultiOutputPolynomialSplineBasis(
+            z_dim=self.model.dim_z,
+            num_out=self.psi_dim,
+            num_knots=num_knots,
+            degree=polyn_degree,
+        )
 
     def _train_internal(self, x, z, x_val, z_val, debugging):
         self.basis.setup(z)
@@ -46,8 +50,9 @@ class SMDIdentity(AbstractEstimationMethod):
         self.model.initialize()
 
         # set up LBFGS optimizer
-        optimizer = torch.optim.LBFGS(self.model.parameters(),
-                                      line_search_fn="strong_wolfe")
+        optimizer = torch.optim.LBFGS(
+            self.model.parameters(), line_search_fn="strong_wolfe"
+        )
         f_z_torch = self._to_tensor(f_z)
 
         # define loss and optimize
@@ -58,14 +63,16 @@ class SMDIdentity(AbstractEstimationMethod):
             loss = torch.matmul(w, psi_f_z).matmul(psi_f_z)
             loss.backward()
             return loss
+
         optimizer.step(closure)
-        
+
 
 class SMDHomoskedastic(SMDIdentity):
     def __init__(self, model, num_knots=5, polyn_degree=2, num_iter=2):
         self.num_iter = num_iter
-        SMDIdentity.__init__(self, model=model,
-                             num_knots=num_knots, polyn_degree=polyn_degree)
+        SMDIdentity.__init__(
+            self, model=model, num_knots=num_knots, polyn_degree=polyn_degree
+        )
 
     def _train_internal(self, x, z, x_val, z_val, debugging):
         self.basis.setup(z)
@@ -80,7 +87,7 @@ class SMDHomoskedastic(SMDIdentity):
             else:
                 psi = self.model.psi(x_tensor).detach().numpy()
                 psi_residual = psi - psi.mean(0, keepdims=True)
-                var_inv = (psi_residual ** 2).mean(0) ** -1
+                var_inv = (psi_residual**2).mean(0) ** -1
             omega_inv = var_inv.reshape(1, self.psi_dim).repeat(n, 0)
             self._fit_theta(x, x_tensor, z_torch, f_z, omega_inv)
 
@@ -101,7 +108,7 @@ class FlexibleVarNetwork(nn.Module):
             nn.LeakyReLU(),
             nn.Linear(50, 20),
             nn.LeakyReLU(),
-            nn.Linear(20, output_dim)
+            nn.Linear(20, output_dim),
         )
 
     def forward(self, z):
@@ -113,8 +120,9 @@ class SMDHeteroskedastic(SMDIdentity):
         self.num_iter = num_iter
         self.var_network = FlexibleVarNetwork(model.dim_z, model.psi_dim)
 
-        SMDIdentity.__init__(self, model=model,
-                             num_knots=num_knots, polyn_degree=polyn_degree)
+        SMDIdentity.__init__(
+            self, model=model, num_knots=num_knots, polyn_degree=polyn_degree
+        )
 
     def _train_internal(self, x, z, x_val, z_val, debugging):
         self.basis.setup(z)
@@ -133,12 +141,15 @@ class SMDHeteroskedastic(SMDIdentity):
                     z_val_torch = self._to_tensor(z_val)
                     x_val_torch = self._to_tensor(x_val)
                     psi_dev = self.model.psi(x_val_torch)
-                    targets_dev = ((psi_dev - psi_dev.mean(0, keepdim=True)) ** 2).detach()
+                    targets_dev = (
+                        (psi_dev - psi_dev.mean(0, keepdim=True)) ** 2
+                    ).detach()
                 else:
                     z_val_torch = None
                     targets_dev = None
-                self._fit_var_network(z_torch, targets, z_val=z_val_torch,
-                                      targets_dev=targets_dev)
+                self._fit_var_network(
+                    z_torch, targets, z_val=z_val_torch, targets_dev=targets_dev
+                )
                 omega_inv = (self.var_network(z_torch) ** -1).detach().numpy()
 
             self._fit_theta(x, x_tensor, z_torch, f_z, omega_inv)
@@ -149,8 +160,16 @@ class SMDHeteroskedastic(SMDIdentity):
             self.model.initialize()
             SMDIdentity._train_internal(self, x, z, x_val, z_val)
 
-    def _fit_var_network(self, z, targets, z_val=None, targets_dev=None,
-                         max_epochs=10000, batch_size=128, max_no_improve=20):
+    def _fit_var_network(
+        self,
+        z,
+        targets,
+        z_val=None,
+        targets_dev=None,
+        max_epochs=10000,
+        batch_size=128,
+        max_no_improve=20,
+    ):
         def square_loss(z_, targets_, var_network_):
             var_pred_ = var_network_(z_)
             return ((var_pred_ - targets_) ** 2).mean()
@@ -159,15 +178,27 @@ class SMDHeteroskedastic(SMDIdentity):
         loss_function = partial(square_loss, var_network_=self.var_network)
         parameters = self.var_network.parameters()
         self.train_network_flexible(
-            loss_function=loss_function, parameters=parameters, n=n,
-            data_tuple=(z, targets), data_tuple_dev=(z_val, targets_dev),
-            max_epochs=max_epochs, batch_size=batch_size,
-            max_no_improve=max_no_improve)
+            loss_function=loss_function,
+            parameters=parameters,
+            n=n,
+            data_tuple=(z, targets),
+            data_tuple_dev=(z_val, targets_dev),
+            max_epochs=max_epochs,
+            batch_size=batch_size,
+            max_no_improve=max_no_improve,
+        )
 
     @staticmethod
-    def train_network_flexible(loss_function, parameters, data_tuple, n,
-                               data_tuple_dev=None, max_epochs=10000,
-                               batch_size=128, max_no_improve=20):
+    def train_network_flexible(
+        loss_function,
+        parameters,
+        data_tuple,
+        n,
+        data_tuple_dev=None,
+        max_epochs=10000,
+        batch_size=128,
+        max_no_improve=20,
+    ):
         optim = torch.optim.Adam(parameters)
         batch_iter = BatchIter(n, batch_size)
         min_dev_loss = float("inf")
@@ -195,10 +226,16 @@ class SMDHeteroskedastic(SMDIdentity):
                         break
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from experiments.exp_heteroskedastic import run_heteroskedastic_n_times
 
     estimatorkwargs = {"dim_z": 1}
-    results = run_heteroskedastic_n_times(theta=1.7, noise=1.0, n_train=200, repititions=20,
-                                         estimatortype=SMDIdentity, estimatorkwargs=estimatorkwargs)
-    print('Thetas: ', results['theta'])
+    results = run_heteroskedastic_n_times(
+        theta=1.7,
+        noise=1.0,
+        n_train=200,
+        repititions=20,
+        estimatortype=SMDIdentity,
+        estimatorkwargs=estimatorkwargs,
+    )
+    print("Thetas: ", results["theta"])

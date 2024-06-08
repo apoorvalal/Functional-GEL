@@ -13,13 +13,23 @@ cvx_solver = cvx.MOSEK
 
 
 class GeneralizedEL(AbstractEstimationMethod):
-
-    def __init__(self, model,
-                 max_num_epochs=50000, eval_freq=2000, max_no_improve=3, burn_in_cycles=5,
-                 theta_optim=None, theta_optim_args=None, pretrain=True,
-                 dual_optim=None, dual_optim_args=None, inneriters=None,
-                 divergence=None, kernel_args=None,
-                 verbose=False):
+    def __init__(
+        self,
+        model,
+        max_num_epochs=50000,
+        eval_freq=2000,
+        max_no_improve=3,
+        burn_in_cycles=5,
+        theta_optim=None,
+        theta_optim_args=None,
+        pretrain=True,
+        dual_optim=None,
+        dual_optim_args=None,
+        inneriters=None,
+        divergence=None,
+        kernel_args=None,
+        verbose=False,
+    ):
         super().__init__(model=model, kernel_args=kernel_args)
 
         if theta_optim_args is None:
@@ -46,7 +56,9 @@ class GeneralizedEL(AbstractEstimationMethod):
 
         self.optimize_step = None
 
-        self.max_num_epochs = max_num_epochs if not self.theta_optim_type == 'lbfgs' else 3
+        self.max_num_epochs = (
+            max_num_epochs if not self.theta_optim_type == "lbfgs" else 3
+        )
         self.eval_freq = eval_freq
         self.max_no_improve = max_no_improve
         self.burn_in_cycles = burn_in_cycles
@@ -59,17 +71,19 @@ class GeneralizedEL(AbstractEstimationMethod):
         self.dual_func = Parameter(shape=(1, self.psi_dim))
 
     def _set_divergence_function(self):
-        if self.divergence_type == 'log':
+        if self.divergence_type == "log":
+
             def divergence(weights=None, cvxpy=False):
                 n_sample = weights.shape[0]
                 if cvxpy:
-                    return - cvx.sum(cvx.log(n_sample * weights))
+                    return -cvx.sum(cvx.log(n_sample * weights))
                 elif isinstance(weights, np.ndarray):
-                    return - np.sum(np.log(n_sample * weights))
+                    return -np.sum(np.log(n_sample * weights))
                 else:
-                    return - torch.sum(torch.log(n_sample * weights))
+                    return -torch.sum(torch.log(n_sample * weights))
 
-        elif self.divergence_type == 'chi2':
+        elif self.divergence_type == "chi2":
+
             def divergence(weights=None, cvxpy=False):
                 n_sample = weights.shape[0]
                 if cvxpy:
@@ -78,7 +92,9 @@ class GeneralizedEL(AbstractEstimationMethod):
                     return np.sum(np.square(n_sample * weights - 1))
                 else:
                     return torch.sum(torch.square(n_sample * weights - 1))
-        elif self.divergence_type == 'kl':
+
+        elif self.divergence_type == "kl":
+
             def divergence(weights=None, cvxpy=False):
                 n_sample = weights.shape[0]
                 if cvxpy:
@@ -87,33 +103,39 @@ class GeneralizedEL(AbstractEstimationMethod):
                     return np.sum(weights * np.log(n_sample * weights))
                 else:
                     return torch.sum(weights * torch.log(n_sample * weights))
-        elif self.divergence_type == 'off':
+
+        elif self.divergence_type == "off":
             return None
         else:
             raise NotImplementedError()
         return divergence
 
     def _set_gel_function(self):
-        if self.divergence_type == 'log':
+        if self.divergence_type == "log":
+
             def divergence(x=None, cvxpy=False):
                 if not cvxpy:
                     return torch.log(self.softplus(1 - x) + 1 / x.shape[0])
                 else:
                     return cvx.log(1 - x)
 
-        elif self.divergence_type == 'chi2':
+        elif self.divergence_type == "chi2":
+
             def divergence(x=None, cvxpy=False):
                 if not cvxpy:
-                    return - 1/2 * torch.square(x + 1)  # -1/2 * torch.square(x + 1)
+                    return -1 / 2 * torch.square(x + 1)  # -1/2 * torch.square(x + 1)
                 else:
-                    return - cvx.square(1/2 * x + 1)
-        elif self.divergence_type == 'kl':
+                    return -cvx.square(1 / 2 * x + 1)
+
+        elif self.divergence_type == "kl":
+
             def divergence(x=None, cvxpy=False):
                 if not cvxpy:
-                    return - torch.exp(x)
+                    return -torch.exp(x)
                 else:
-                    return - cvx.exp(x)
-        elif self.divergence_type == 'off':
+                    return -cvx.exp(x)
+
+        elif self.divergence_type == "off":
             return None
         else:
             raise NotImplementedError
@@ -121,60 +143,85 @@ class GeneralizedEL(AbstractEstimationMethod):
 
     def _set_optimizers(self):
         # Inner optimization settings (dual_func)
-        if self.dual_optim_type == 'adam':
-            self.dual_func_optimizer = torch.optim.Adam(params=self.dual_func.parameters(),
-                                                        lr=self.dual_func_optim_args["lr"], betas=(0.5, 0.9))
-        elif self.dual_optim_type == 'oadam':
-            self.dual_func_optimizer = OAdam(params=self.dual_func.parameters(),
-                                             lr=self.dual_func_optim_args["lr"], betas=(0.5, 0.9))
-        elif self.dual_optim_type == 'lbfgs':
+        if self.dual_optim_type == "adam":
+            self.dual_func_optimizer = torch.optim.Adam(
+                params=self.dual_func.parameters(),
+                lr=self.dual_func_optim_args["lr"],
+                betas=(0.5, 0.9),
+            )
+        elif self.dual_optim_type == "oadam":
+            self.dual_func_optimizer = OAdam(
+                params=self.dual_func.parameters(),
+                lr=self.dual_func_optim_args["lr"],
+                betas=(0.5, 0.9),
+            )
+        elif self.dual_optim_type == "lbfgs":
             if self.dual_normalization is None:
-                self.dual_func_optimizer = torch.optim.LBFGS(self.dual_func.parameters(),
-                                                             max_iter=500,
-                                                             line_search_fn="strong_wolfe")
+                self.dual_func_optimizer = torch.optim.LBFGS(
+                    self.dual_func.parameters(),
+                    max_iter=500,
+                    line_search_fn="strong_wolfe",
+                )
             else:
-                self.dual_func_optimizer = torch.optim.LBFGS(list(self.dual_func.parameters()) + list(self.dual_normalization.parameters()),
-                                                             max_iter=500,
-                                                             line_search_fn="strong_wolfe")
+                self.dual_func_optimizer = torch.optim.LBFGS(
+                    list(self.dual_func.parameters())
+                    + list(self.dual_normalization.parameters()),
+                    max_iter=500,
+                    line_search_fn="strong_wolfe",
+                )
         else:
             self.dual_func_optimizer = None
 
         # Outer optimization settings (theta)
-        if self.theta_optim_type == 'adam':
-            self.theta_optimizer = torch.optim.Adam(params=self.model.parameters(), lr=self.theta_optim_args["lr"],
-                                                    betas=(0.5, 0.9))
+        if self.theta_optim_type == "adam":
+            self.theta_optimizer = torch.optim.Adam(
+                params=self.model.parameters(),
+                lr=self.theta_optim_args["lr"],
+                betas=(0.5, 0.9),
+            )
             self.optimize_step = self._gradient_step
-        elif self.theta_optim_type == 'oadam':
-            self.theta_optimizer = OAdam(params=self.model.parameters(), lr=self.theta_optim_args["lr"],
-                                         betas=(0.5, 0.9))
+        elif self.theta_optim_type == "oadam":
+            self.theta_optimizer = OAdam(
+                params=self.model.parameters(),
+                lr=self.theta_optim_args["lr"],
+                betas=(0.5, 0.9),
+            )
             self.optimize_step = self._gradient_step
-        elif self.theta_optim_type == 'lbfgs':
-            self.theta_optimizer = torch.optim.LBFGS(self.model.parameters(),
-                                                     line_search_fn="strong_wolfe",
-                                                     max_iter=100)
+        elif self.theta_optim_type == "lbfgs":
+            self.theta_optimizer = torch.optim.LBFGS(
+                self.model.parameters(), line_search_fn="strong_wolfe", max_iter=100
+            )
             self.optimize_step = self._lbfgs_step
         else:
             self.dual_func_optimizer = None
 
         # Optimistic Adam gradient descent ascent (e.g. for neural FGEL/VMM)
-        if self.theta_optim_type == 'oadam_gda' or self.dual_optim_type == 'oadam_gda':
+        if self.theta_optim_type == "oadam_gda" or self.dual_optim_type == "oadam_gda":
             if self.dual_normalization is not None:
-                dual_params = list(self.dual_func.parameters()) + list(self.dual_normalization.parameters())
+                dual_params = list(self.dual_func.parameters()) + list(
+                    self.dual_normalization.parameters()
+                )
             else:
                 dual_params = self.dual_func.parameters()
-            self.dual_func_optimizer = OAdam(params=dual_params, lr=self.dual_func_optim_args["lr"],
-                                             betas=(0.5, 0.9))
-            self.theta_optimizer = OAdam(params=self.model.parameters(), lr=self.theta_optim_args["lr"],
-                                         betas=(0.5, 0.9))
+            self.dual_func_optimizer = OAdam(
+                params=dual_params, lr=self.dual_func_optim_args["lr"], betas=(0.5, 0.9)
+            )
+            self.theta_optimizer = OAdam(
+                params=self.model.parameters(),
+                lr=self.theta_optim_args["lr"],
+                betas=(0.5, 0.9),
+            )
             self.optimize_step = self._gradient_descent_ascent_step
 
     """------------- Objective of standard finite dimensional GEL to be overridden for FGEL ------------"""
+
     def objective(self, x, z, *args, **kwargs):
         dual_func_psi = self.model.psi(x) @ torch.transpose(self.dual_func.params, 1, 0)
         objective = torch.mean(self.gel_function(dual_func_psi))
         return objective, -objective
 
     """--------------------- Optimization methods for theta ---------------------"""
+
     def _gradient_step(self, x_tensor, z_tensor, inneriters=100):
         self.optimize_dual_func(x_tensor, z_tensor, iters=inneriters)
         self.theta_optimizer.zero_grad()
@@ -213,15 +260,16 @@ class GeneralizedEL(AbstractEstimationMethod):
         self.dual_func_optimizer.zero_grad()
         dual_func_obj.backward()
         self.dual_func_optimizer.step()
-        return float(- dual_func_obj.detach().numpy())
+        return float(-dual_func_obj.detach().numpy())
 
     """--------------------- Optimization methods for dual_func ---------------------"""
+
     def optimize_dual_func(self, x_tensor, z_tensor, iters=5000):
-        if self.dual_optim_type == 'cvxpy':
+        if self.dual_optim_type == "cvxpy":
             return self._optimize_dual_func_cvxpy(x_tensor, z_tensor)
-        elif self.dual_optim_type == 'lbfgs':
+        elif self.dual_optim_type == "lbfgs":
             return self._optimize_dual_func_lbfgs(x_tensor, z_tensor)
-        elif self.dual_optim_type == 'adam' or self.dual_optim_type == 'oadam':
+        elif self.dual_optim_type == "adam" or self.dual_optim_type == "oadam":
             return self._optimize_dual_func_gd(x_tensor, z_tensor, iters=iters)
         else:
             raise NotImplementedError
@@ -232,12 +280,14 @@ class GeneralizedEL(AbstractEstimationMethod):
             z = z_tensor.numpy()
             n_sample = z.shape[0]
 
-            dual_func = cvx.Variable(shape=(1, self.psi_dim))   # (1, k)
-            psi = self.model.psi(x).detach().numpy()   # (n_sample, k)
-            dual_func_psi = psi @ cvx.transpose(dual_func)    # (n_sample, 1)
+            dual_func = cvx.Variable(shape=(1, self.psi_dim))  # (1, k)
+            psi = self.model.psi(x).detach().numpy()  # (n_sample, k)
+            dual_func_psi = psi @ cvx.transpose(dual_func)  # (n_sample, 1)
 
-            objective = 1/n_sample * cvx.sum(self.gel_function(dual_func_psi, cvxpy=True))
-            if self.divergence_type == 'log':
+            objective = (
+                1 / n_sample * cvx.sum(self.gel_function(dual_func_psi, cvxpy=True))
+            )
+            if self.divergence_type == "log":
                 constraint = [dual_func_psi <= 1 - n_sample]
             else:
                 constraint = []
@@ -259,7 +309,9 @@ class GeneralizedEL(AbstractEstimationMethod):
             self.dual_func_optimizer.step(closure)
         if np.isnan(np.linalg.norm(self.dual_func.params.detach().numpy())):
             with torch.no_grad():
-                self.dual_func.params.copy_(torch.zeros(self.dual_func.shape, dtype=torch.float32))
+                self.dual_func.params.copy_(
+                    torch.zeros(self.dual_func.shape, dtype=torch.float32)
+                )
         return
 
     def _optimize_dual_func_gd(self, x_tensor, z_tensor, iters):
@@ -323,8 +375,10 @@ class GeneralizedEL(AbstractEstimationMethod):
                 val_mmr_loss = self._calc_val_mmr(x_val, z_val)
                 if self.verbose:
                     val_theta_obj, _ = self.objective(x_val_tensor, z_val_tensor)
-                    print("epoch %d, theta-obj=%f, val-mmr-loss=%f"
-                          % (epoch_i, val_theta_obj, val_mmr_loss))
+                    print(
+                        "epoch %d, theta-obj=%f, val-mmr-loss=%f"
+                        % (epoch_i, val_theta_obj, val_mmr_loss)
+                    )
                 mmr.append(float(val_mmr_loss))
                 if val_mmr_loss < min_val_loss:
                     min_val_loss = val_mmr_loss
@@ -419,11 +473,24 @@ class GeneralizedEL(AbstractEstimationMethod):
     #     return profile_divergence
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from experiments.exp_heteroskedastic import run_heteroskedastic_n_times
 
-    estimatorkwargs = dict(theta_optim_args={}, max_num_epochs=100, eval_freq=50,
-                           divergence='chi2', outeropt='lbfgs', inneropt='cvxpy', inneriters=100)
-    results = run_heteroskedastic_n_times(theta=1.7, noise=1.0, n_train=200, repititions=10,
-                                          estimatortype=GeneralizedEL, estimatorkwargs=estimatorkwargs)
-    print('Thetas: ', results['theta'])
+    estimatorkwargs = dict(
+        theta_optim_args={},
+        max_num_epochs=100,
+        eval_freq=50,
+        divergence="chi2",
+        outeropt="lbfgs",
+        inneropt="cvxpy",
+        inneriters=100,
+    )
+    results = run_heteroskedastic_n_times(
+        theta=1.7,
+        noise=1.0,
+        n_train=200,
+        repititions=10,
+        estimatortype=GeneralizedEL,
+        estimatorkwargs=estimatorkwargs,
+    )
+    print("Thetas: ", results["theta"])

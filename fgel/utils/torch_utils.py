@@ -51,8 +51,10 @@ def np_to_tensor(data_array):
 
 def torch_softplus(x, sharpness=1):
     x_s = sharpness * x
-    return ((torch.log(1 + torch.exp(-torch.abs(x_s)))
-             + torch.max(x_s, torch.zeros_like(x_s))) / sharpness)
+    return (
+        torch.log(1 + torch.exp(-torch.abs(x_s)))
+        + torch.max(x_s, torch.zeros_like(x_s))
+    ) / sharpness
 
 
 class Parameter(nn.Module):
@@ -72,9 +74,13 @@ class Parameter(nn.Module):
     def init_params(self):
         if self.shape is None:
             assert self.n_sample is not None
-            start_val = torch.tensor(1 / self.n_sample * np.ones([self.n_sample, 1]), dtype=torch.float32)
+            start_val = torch.tensor(
+                1 / self.n_sample * np.ones([self.n_sample, 1]), dtype=torch.float32
+            )
         else:
-            start_val = torch.Tensor([1/self.shape[0]]) * torch.ones(self.shape, dtype=torch.float32)
+            start_val = torch.Tensor([1 / self.shape[0]]) * torch.ones(
+                self.shape, dtype=torch.float32
+            )
         self.params = torch.nn.Parameter(start_val, requires_grad=True)
 
     def project_simplex_constraint(self):
@@ -88,7 +94,7 @@ class Parameter(nn.Module):
     def project_log_input_constraint(self, alpha_rho):
         with torch.no_grad():
             max_val = torch.max(alpha_rho)
-            constraint_val = torch.tensor(1 - 1/self.n_sample)
+            constraint_val = torch.tensor(1 - 1 / self.n_sample)
             if max_val > constraint_val:
                 # Rescale the length of alpha such that constraint is fulfilled
                 alpha = self.params / max_val * constraint_val
@@ -107,21 +113,25 @@ class Parameter(nn.Module):
     def reset_params(self):
         if self.shape is None:
             assert self.n_sample is not None
-            start_val = torch.tensor(1 / self.n_sample * np.ones([self.n_sample, 1]), dtype=torch.float32)
+            start_val = torch.tensor(
+                1 / self.n_sample * np.ones([self.n_sample, 1]), dtype=torch.float32
+            )
         else:
-            start_val = torch.Tensor([1/self.shape[0]]) * torch.ones(self.shape, dtype=torch.float32)
+            start_val = torch.Tensor([1 / self.shape[0]]) * torch.ones(
+                self.shape, dtype=torch.float32
+            )
         self.update_params(start_val)
 
 
 class ModularMLPModel(nn.Module):
-    def __init__(self, input_dim, layer_widths, activation=None,
-                 last_layer=None, num_out=1):
+    def __init__(
+        self, input_dim, layer_widths, activation=None, last_layer=None, num_out=1
+    ):
         nn.Module.__init__(self)
         if activation is None:
             activation = nn.ReLU
         if activation.__class__.__name__ == "LeakyReLU":
-            self.gain = nn.init.calculate_gain("leaky_relu",
-                                               activation.negative_slope)
+            self.gain = nn.init.calculate_gain("leaky_relu", activation.negative_slope)
         else:
             activation_name = activation.__class__.__name__.lower()
             try:
@@ -135,7 +145,7 @@ class ModularMLPModel(nn.Module):
             num_layers = len(layer_widths)
             layers = [nn.Linear(input_dim, layer_widths[0]), activation()]
             for i in range(1, num_layers):
-                w_in = layer_widths[i-1]
+                w_in = layer_widths[i - 1]
                 w_out = layer_widths[i]
                 layers.extend([nn.Linear(w_in, w_out), activation()])
             layers.append(nn.Linear(layer_widths[-1], num_out))

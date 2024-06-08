@@ -1,4 +1,3 @@
-
 class AbstractExperiment:
     def __init__(self, psi_dim, theta_dim, z_dim):
         self.psi_dim = psi_dim
